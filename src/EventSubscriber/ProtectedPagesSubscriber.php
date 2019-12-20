@@ -168,20 +168,34 @@ class ProtectedPagesSubscriber implements EventSubscriberInterface {
    *   The protected page id.
    */
   public function protectedPagesIsPageLocked($current_path, $normal_path) {
-    $fields = ['pid'];
-    $conditions = [];
-    $conditions['or'][] = [
-      'field' => 'path',
-      'value' => $normal_path,
-      'operator' => '=',
-    ];
-    $conditions['or'][] = [
-      'field' => 'path',
-      'value' => $current_path,
-      'operator' => '=',
-    ];
-    $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
+    $protectedPagesStorage = \Drupal::service('protected_pages.storage');
+    $pid = NULL;
 
+    // check all protected pages entries for path match, including wildcards
+    $all_protected_pages = $protectedPagesStorage->loadAllProtectedPages();
+    foreach ($all_protected_pages as $protected_page) {
+      if (\Drupal::service('path.matcher')->matchPath($current_path, $protected_page->path) && $current_path != '/protected-page') {
+        $pid = $protected_page->pid;
+        break;
+      }
+    }
+
+    if (! $pid) {
+      $fields = ['pid'];
+      $conditions = [];
+      $conditions['or'][] = [
+        'field' => 'path',
+        'value' => $normal_path,
+        'operator' => '=',
+      ];
+      $conditions['or'][] = [
+        'field' => 'path',
+        'value' => $current_path,
+        'operator' => '=',
+      ];
+
+      $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
+    }
     if (isset($_SESSION['_protected_page']['passwords'][$pid]['expire_time'])) {
       if (time() >= $_SESSION['_protected_page']['passwords'][$pid]['expire_time']) {
         unset($_SESSION['_protected_page']['passwords'][$pid]['request_time']);

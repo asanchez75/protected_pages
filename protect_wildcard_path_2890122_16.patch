@@ -1,0 +1,120 @@
+diff --git a/src/EventSubscriber/ProtectedPagesSubscriber.php b/src/EventSubscriber/ProtectedPagesSubscriber.php
+index 7f707f0..572ab2e 100644
+--- a/src/EventSubscriber/ProtectedPagesSubscriber.php
++++ b/src/EventSubscriber/ProtectedPagesSubscriber.php
+@@ -168,20 +168,34 @@ class ProtectedPagesSubscriber implements EventSubscriberInterface {
+    *   The protected page id.
+    */
+   public function protectedPagesIsPageLocked($current_path, $normal_path) {
+-    $fields = ['pid'];
+-    $conditions = [];
+-    $conditions['or'][] = [
+-      'field' => 'path',
+-      'value' => $normal_path,
+-      'operator' => '=',
+-    ];
+-    $conditions['or'][] = [
+-      'field' => 'path',
+-      'value' => $current_path,
+-      'operator' => '=',
+-    ];
+-    $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
++    $protectedPagesStorage = \Drupal::service('protected_pages.storage');
++    $pid = NULL;
++
++    // check all protected pages entries for path match, including wildcards
++    $all_protected_pages = $protectedPagesStorage->loadAllProtectedPages();
++    foreach ($all_protected_pages as $protected_page) {
++      if (\Drupal::service('path.matcher')->matchPath($current_path, $protected_page->path) && $current_path != '/protected-page') {
++        $pid = $protected_page->pid;
++        break;
++      }
++    }
+ 
++    if (! $pid) {
++      $fields = ['pid'];
++      $conditions = [];
++      $conditions['or'][] = [
++        'field' => 'path',
++        'value' => $normal_path,
++        'operator' => '=',
++      ];
++      $conditions['or'][] = [
++        'field' => 'path',
++        'value' => $current_path,
++        'operator' => '=',
++      ];
++
++      $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
++    }
+     if (isset($_SESSION['_protected_page']['passwords'][$pid]['expire_time'])) {
+       if (time() >= $_SESSION['_protected_page']['passwords'][$pid]['expire_time']) {
+         unset($_SESSION['_protected_page']['passwords'][$pid]['request_time']);
+diff --git a/src/Form/ProtectedPagesAddForm.php b/src/Form/ProtectedPagesAddForm.php
+index fa2cdd8..686f835 100644
+--- a/src/Form/ProtectedPagesAddForm.php
++++ b/src/Form/ProtectedPagesAddForm.php
+@@ -110,7 +110,7 @@ class ProtectedPagesAddForm extends FormBase {
+     $form['rules_list']['path'] = [
+       '#type' => 'textfield',
+       '#title' => $this->t('Relative Path'),
+-      '#description' => $this->t('Enter relative drupal path. For example, "/node/5", "new-events" etc.'),
++      '#description' => $this->t('Enter relative drupal path. For example, "/node/5", "new-events" etc. Use the \'*\' wildcard character to target multiple pages, e.g. "/new-events/*".  For all pages on your site, enter "/*".'),
+       '#required' => TRUE,
+     ];
+     $form['rules_list']['password'] = [
+@@ -138,8 +138,9 @@ class ProtectedPagesAddForm extends FormBase {
+     else {
+       $normal_path = $this->aliasManager->getPathByAlias($form_state->getValue('path'));
+       $path_alias = Unicode::strtolower($this->aliasManager->getAliasByPath($form_state->getValue('path')));
+-      if (!$this->pathValidator->isValid($normal_path)) {
+-        $form_state->setErrorByName('path', $this->t('Please enter a correct path!'));
++      // if there are no wildcards, and the path is invalid
++      if (substr_count($entered_path, '*') === 0 && !$this->pathValidator->isValid($normal_path)) {
++        $form_state->setErrorByName('path', $this->t('Please enter a valid path.'));
+       }
+       $fields = ['pid'];
+       $conditions = [];
+@@ -156,7 +157,7 @@ class ProtectedPagesAddForm extends FormBase {
+ 
+       $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
+       if ($pid) {
+-        $form_state->setErrorByName('path', $this->t('Duplicate path entry is not allowed. There is already a path or its alias exists.'));
++        $form_state->setErrorByName('path', $this->t('There is already a path or its alias exists.'));
+       }
+     }
+   }
+diff --git a/src/Form/ProtectedPagesEditForm.php b/src/Form/ProtectedPagesEditForm.php
+index 63bdb61..f5288e8 100644
+--- a/src/Form/ProtectedPagesEditForm.php
++++ b/src/Form/ProtectedPagesEditForm.php
+@@ -123,7 +123,7 @@ class ProtectedPagesEditForm extends FormBase {
+       '#type' => 'textfield',
+       '#title' => $this->t('Relative Path'),
+       '#default_value' => $path,
+-      '#description' => $this->t('Enter relative drupal path. For example, "/node/5", "/new-events" etc.'),
++      '#description' => $this->t('Enter relative drupal path. For example, "/node/5", "/new-events" etc. Use the \'*\' wildcard character to target multiple pages, e.g. "/new-events/*".  For all pages on your site, enter "/*".'),
+       '#required' => TRUE,
+     ];
+     $form['rules_list']['password'] = [
+@@ -154,8 +154,9 @@ class ProtectedPagesEditForm extends FormBase {
+     else {
+       $normal_path = $this->aliasManager->getPathByAlias($form_state->getValue('path'));
+       $path_alias = Unicode::strtolower($this->aliasManager->getAliasByPath($form_state->getValue('path')));
+-      if (!$this->pathValidator->isValid($normal_path)) {
+-        $form_state->setErrorByName('path', $this->t('Please enter a correct path!'));
++      // if there are no wildcards, and the path is invalid
++      if (substr_count($entered_path, '*') === 0 && !$this->pathValidator->isValid($normal_path)) {
++        $form_state->setErrorByName('path', $this->t('Please enter a valid path.'));
+       }
+       $fields = ['pid'];
+       $conditions = [];
+@@ -177,7 +178,7 @@ class ProtectedPagesEditForm extends FormBase {
+ 
+       $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
+       if ($pid) {
+-        $form_state->setErrorByName('path', $this->t('Duplicate path entry is not allowed. There is already a path or its alias exists.'));
++        $form_state->setErrorByName('path', $this->t('There is already a path or its alias exists.'));
+       }
+     }
+   }
