@@ -196,8 +196,7 @@ class ProtectedPagesSubscriber implements EventSubscriberInterface {
 
       $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
     }
-
-   
+       
     $config = \Drupal::config('protected_pages.settings');
     $global_password_setting = $config->get('password.per_page_or_global');
     
