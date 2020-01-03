@@ -116,7 +116,7 @@ class ProtectedPagesAddForm extends FormBase {
     $form['rules_list']['password'] = [
       '#type' => 'password_confirm',
       '#size' => 25,
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
     $form['rules_list']['submit'] = [
       '#type' => 'submit',

@@ -196,13 +196,25 @@ class ProtectedPagesSubscriber implements EventSubscriberInterface {
 
       $pid = $this->protectedPagesStorage->loadProtectedPage($fields, $conditions, TRUE);
     }
-    if (isset($_SESSION['_protected_page']['passwords'][$pid]['expire_time'])) {
-      if (time() >= $_SESSION['_protected_page']['passwords'][$pid]['expire_time']) {
-        unset($_SESSION['_protected_page']['passwords'][$pid]['request_time']);
-        unset($_SESSION['_protected_page']['passwords'][$pid]['expire_time']);
+
+   
+    $config = \Drupal::config('protected_pages.settings');
+    $global_password_setting = $config->get('password.per_page_or_global');
+    
+    if ($global_password_setting === 'only_global') {
+      $pid_session = 0;
+    }
+    else {
+      $pid_session = $pid;
+    }
+
+    if (isset($_SESSION['_protected_page']['passwords'][$pid_session]['expire_time'])) {
+      if (time() >= $_SESSION['_protected_page']['passwords'][$pid_session]['expire_time']) {
+        unset($_SESSION['_protected_page']['passwords'][$pid_session]['request_time']);
+        unset($_SESSION['_protected_page']['passwords'][$pid_session]['expire_time']);
       }
     }
-    if (isset($_SESSION['_protected_page']['passwords'][$pid]['request_time'])) {
+    if (isset($_SESSION['_protected_page']['passwords'][$pid_session]['request_time'])) {
       return FALSE;
     }
     return $pid;

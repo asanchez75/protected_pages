@@ -165,6 +165,9 @@ class ProtectedPagesLoginForm extends FormBase {
 
         $form_state->setErrorByName('password', $config->get('others.protected_pages_incorrect_password_msg'));
       }
+      else {
+         $form_state->setValue('protected_page_pid', 0);
+      }
     }
     else {
       $global_password = $config->get('password.protected_pages_global_password');
